@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"journal-scope/internal/config"
 	"journal-scope/internal/gatewaytls"
@@ -74,5 +80,34 @@ func main() {
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 	}
 
-	log.Fatal(srv.ListenAndServe())
+	serveErrCh := make(chan error, 1)
+	go func() {
+		serveErrCh <- srv.ListenAndServe()
+	}()
+
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serveErrCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("serve http: %v", err)
+		}
+		return
+	case <-shutdownCtx.Done():
+		log.Printf("received shutdown signal, stopping server")
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(drainCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("shutdown server: %v", err)
+	}
+
+	if err := <-serveErrCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("serve http after shutdown: %v", err)
+	}
+
+	log.Printf("journal-scope stopped")
 }
