@@ -58,6 +58,27 @@ type FieldMatch struct {
 	Value string
 }
 
+func ValidateBaseURL(baseURL *url.URL) error {
+	if baseURL == nil {
+		return fmt.Errorf("gateway target url is required")
+	}
+	if !baseURL.IsAbs() || baseURL.Host == "" {
+		return fmt.Errorf("gateway target url must be absolute")
+	}
+	switch baseURL.Scheme {
+	case "http", "https":
+	default:
+		return fmt.Errorf("gateway target url scheme must be http or https")
+	}
+	if baseURL.User != nil {
+		return fmt.Errorf("gateway target url must not include user info")
+	}
+	if baseURL.Fragment != "" {
+		return fmt.Errorf("gateway target url must not include a fragment")
+	}
+	return nil
+}
+
 func NewClient(transport *http.Transport) *Client {
 	baseTransport := transport
 	if baseTransport == nil {
@@ -156,7 +177,11 @@ func (c *Client) FetchOldestLogs(ctx context.Context, target RequestTarget, quer
 }
 
 func (c *Client) fetchLogsWithRange(ctx context.Context, target RequestTarget, query LogQuery, rangeHeader string) (*http.Response, error) {
-	endpoint := c.buildEntriesURL(target.BaseURL, query, false)
+	baseURL, err := validatedBaseURL(target.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := c.buildEntriesURL(baseURL, query, false)
 	client := c.clientForTarget(false, target)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
@@ -169,7 +194,11 @@ func (c *Client) fetchLogsWithRange(ctx context.Context, target RequestTarget, q
 }
 
 func (c *Client) TailLogs(ctx context.Context, target RequestTarget, query LogQuery, cursor string) (*http.Response, error) {
-	endpoint := c.buildEntriesURL(target.BaseURL, query, true)
+	baseURL, err := validatedBaseURL(target.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := c.buildEntriesURL(baseURL, query, true)
 	client := c.clientForTarget(true, target)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
@@ -182,7 +211,11 @@ func (c *Client) TailLogs(ctx context.Context, target RequestTarget, query LogQu
 }
 
 func (c *Client) FetchFieldValues(ctx context.Context, target RequestTarget, fieldName string) (*http.Response, error) {
-	endpoint := cloneURL(target.BaseURL)
+	baseURL, err := validatedBaseURL(target.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := cloneURL(baseURL)
 	endpoint.Path = joinPath(endpoint.Path, "fields", fieldName)
 	endpoint.RawQuery = ""
 	client := c.clientForTarget(false, target)
@@ -305,6 +338,13 @@ func buildGatewayFilterQuery(query LogQuery) url.Values {
 func cloneURL(source *url.URL) *url.URL {
 	clone := *source
 	return &clone
+}
+
+func validatedBaseURL(baseURL *url.URL) (*url.URL, error) {
+	if err := ValidateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
+	return cloneURL(baseURL), nil
 }
 
 func joinPath(parts ...string) string {

@@ -1,0 +1,252 @@
+diff --git a/internal/journalproxy/client.go b/internal/journalproxy/client.go
+index 9d6007a..d2bb686 100644
+--- a/internal/journalproxy/client.go
++++ b/internal/journalproxy/client.go
+@@ -58,6 +58,27 @@ type FieldMatch struct {
+ 	Value string
+ }
+ 
++func ValidateBaseURL(baseURL *url.URL) error {
++	if baseURL == nil {
++		return fmt.Errorf("gateway target url is required")
++	}
++	if !baseURL.IsAbs() || baseURL.Host == "" {
++		return fmt.Errorf("gateway target url must be absolute")
++	}
++	switch baseURL.Scheme {
++	case "http", "https":
++	default:
++		return fmt.Errorf("gateway target url scheme must be http or https")
++	}
++	if baseURL.User != nil {
++		return fmt.Errorf("gateway target url must not include user info")
++	}
++	if baseURL.Fragment != "" {
++		return fmt.Errorf("gateway target url must not include a fragment")
++	}
++	return nil
++}
++
+ func NewClient(transport *http.Transport) *Client {
+ 	baseTransport := transport
+ 	if baseTransport == nil {
+@@ -156,7 +177,11 @@ func (c *Client) FetchOldestLogs(ctx context.Context, target RequestTarget, quer
+ }
+ 
+ func (c *Client) fetchLogsWithRange(ctx context.Context, target RequestTarget, query LogQuery, rangeHeader string) (*http.Response, error) {
+-	endpoint := c.buildEntriesURL(target.BaseURL, query, false)
++	baseURL, err := validatedBaseURL(target.BaseURL)
++	if err != nil {
++		return nil, err
++	}
++	endpoint := c.buildEntriesURL(baseURL, query, false)
+ 	client := c.clientForTarget(false, target)
+ 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+ 	if err != nil {
+@@ -169,7 +194,11 @@ func (c *Client) fetchLogsWithRange(ctx context.Context, target RequestTarget, q
+ }
+ 
+ func (c *Client) TailLogs(ctx context.Context, target RequestTarget, query LogQuery, cursor string) (*http.Response, error) {
+-	endpoint := c.buildEntriesURL(target.BaseURL, query, true)
++	baseURL, err := validatedBaseURL(target.BaseURL)
++	if err != nil {
++		return nil, err
++	}
++	endpoint := c.buildEntriesURL(baseURL, query, true)
+ 	client := c.clientForTarget(true, target)
+ 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+ 	if err != nil {
+@@ -182,7 +211,11 @@ func (c *Client) TailLogs(ctx context.Context, target RequestTarget, query LogQu
+ }
+ 
+ func (c *Client) FetchFieldValues(ctx context.Context, target RequestTarget, fieldName string) (*http.Response, error) {
+-	endpoint := cloneURL(target.BaseURL)
++	baseURL, err := validatedBaseURL(target.BaseURL)
++	if err != nil {
++		return nil, err
++	}
++	endpoint := cloneURL(baseURL)
+ 	endpoint.Path = joinPath(endpoint.Path, "fields", fieldName)
+ 	endpoint.RawQuery = ""
+ 	client := c.clientForTarget(false, target)
+@@ -307,6 +340,13 @@ func cloneURL(source *url.URL) *url.URL {
+ 	return &clone
+ }
+ 
++func validatedBaseURL(baseURL *url.URL) (*url.URL, error) {
++	if err := ValidateBaseURL(baseURL); err != nil {
++		return nil, err
++	}
++	return cloneURL(baseURL), nil
++}
++
+ func joinPath(parts ...string) string {
+ 	joined := make([]string, 0, len(parts))
+ 	for _, part := range parts {
+diff --git a/internal/journalproxy/client_test.go b/internal/journalproxy/client_test.go
+index 99866fd..b9442b4 100644
+--- a/internal/journalproxy/client_test.go
++++ b/internal/journalproxy/client_test.go
+@@ -1,7 +1,9 @@
+ package journalproxy
+ 
+ import (
++	"context"
+ 	"net/url"
++	"strings"
+ 	"testing"
+ )
+ 
+@@ -146,3 +148,47 @@ func TestBuildEntriesURLAndHelpers(t *testing.T) {
+ 		t.Fatalf("joinPath returned unexpected value")
+ 	}
+ }
++
++func TestValidateBaseURLRejectsUnsafeTargets(t *testing.T) {
++	testCases := []struct {
++		name   string
++		rawURL string
++		want   string
++	}{
++		{name: "nil", want: "required"},
++		{name: "relative", rawURL: "/api", want: "absolute"},
++		{name: "unsupported scheme", rawURL: "ftp://gateway.example.com", want: "http or https"},
++		{name: "userinfo", rawURL: "https://user:pass@gateway.example.com", want: "user info"},
++		{name: "fragment", rawURL: "https://gateway.example.com/api#frag", want: "fragment"},
++	}
++
++	for _, tc := range testCases {
++		t.Run(tc.name, func(t *testing.T) {
++			var parsed *url.URL
++			if tc.rawURL != "" {
++				var err error
++				parsed, err = url.Parse(tc.rawURL)
++				if err != nil {
++					t.Fatalf("url.Parse() error = %v", err)
++				}
++			}
++			err := ValidateBaseURL(parsed)
++			if err == nil || !strings.Contains(err.Error(), tc.want) {
++				t.Fatalf("ValidateBaseURL() error = %v, want substring %q", err, tc.want)
++			}
++		})
++	}
++}
++
++func TestFetchLogsRejectsUnsafeTargetBeforeNetworkRequest(t *testing.T) {
++	client := NewClient(nil)
++	targetURL, err := url.Parse("ftp://gateway.example.com")
++	if err != nil {
++		t.Fatalf("url.Parse() error = %v", err)
++	}
++
++	_, err = client.FetchLogs(context.Background(), RequestTarget{BaseURL: targetURL}, LogQuery{Limit: 1})
++	if err == nil || !strings.Contains(err.Error(), "http or https") {
++		t.Fatalf("FetchLogs() error = %v, want unsupported scheme error", err)
++	}
++}
+diff --git a/internal/runtimeconfig/store.go b/internal/runtimeconfig/store.go
+index fb39ba7..48709fb 100644
+--- a/internal/runtimeconfig/store.go
++++ b/internal/runtimeconfig/store.go
+@@ -11,6 +11,7 @@ import (
+ 	"time"
+ 
+ 	"journal-scope/internal/config"
++	"journal-scope/internal/journalproxy"
+ 	"journal-scope/internal/security"
+ )
+ 
+@@ -308,9 +309,13 @@ func (s *Store) validateLocked() error {
+ 		if strings.TrimSpace(target.URL) == "" {
+ 			return fmt.Errorf("runtime config gateway target missing url")
+ 		}
+-		if parsed, err := url.Parse(target.URL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
++		parsed, err := url.Parse(target.URL)
++		if err != nil {
+ 			return fmt.Errorf("runtime config gateway target url must be a full URL")
+ 		}
++		if err := journalproxy.ValidateBaseURL(parsed); err != nil {
++			return fmt.Errorf("runtime config gateway target url is invalid: %w", err)
++		}
+ 		if strings.TrimSpace(target.TLSServerName) != "" {
+ 			if strings.ContainsAny(strings.TrimSpace(target.TLSServerName), "/:\\") {
+ 				return fmt.Errorf("runtime config gateway target tls server name must be a hostname")
+@@ -383,9 +388,12 @@ func normalizeTargets(targets []GatewayTarget) ([]GatewayTarget, error) {
+ 			return nil, fmt.Errorf("duplicate gateway target id: %s", id)
+ 		}
+ 		parsed, err := url.Parse(rawURL)
+-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
++		if err != nil {
+ 			return nil, fmt.Errorf("gateway target url must be a full URL")
+ 		}
++		if err := journalproxy.ValidateBaseURL(parsed); err != nil {
++			return nil, fmt.Errorf("gateway target url is invalid: %w", err)
++		}
+ 		headers, err := normalizeHeaders(target.Headers)
+ 		if err != nil {
+ 			return nil, err
+diff --git a/internal/runtimeconfig/store_test.go b/internal/runtimeconfig/store_test.go
+index 9735b45..ef23c46 100644
+--- a/internal/runtimeconfig/store_test.go
++++ b/internal/runtimeconfig/store_test.go
+@@ -41,6 +41,9 @@ func TestNormalizeTargetsRejectsInvalidInput(t *testing.T) {
+ 	if _, err := normalizeTargets([]GatewayTarget{{ID: "a", Name: "A", URL: "not-a-url"}}); err == nil {
+ 		t.Fatalf("expected invalid URL to fail")
+ 	}
++	if _, err := normalizeTargets([]GatewayTarget{{ID: "a", Name: "A", URL: "ftp://a.example.com"}}); err == nil {
++		t.Fatalf("expected unsupported URL scheme to fail")
++	}
+ 	if _, err := normalizeTargets([]GatewayTarget{
+ 		{ID: "dup", Name: "A", URL: "https://a.example.com"},
+ 		{ID: "dup", Name: "B", URL: "https://b.example.com"},
+diff --git a/internal/server/server.go b/internal/server/server.go
+index 934080a..42e07b6 100644
+--- a/internal/server/server.go
++++ b/internal/server/server.go
+@@ -327,12 +327,18 @@ func (s *Server) handleTestGateway(w http.ResponseWriter, r *http.Request) {
+ 		writeJSONError(w, http.StatusBadRequest, "invalid gateway test payload")
+ 		return
+ 	}
++	redactedTarget := redactURLStringForLog(body.URL)
+ 	targetURL, err := url.Parse(strings.TrimSpace(body.URL))
+-	if err != nil || targetURL.Scheme == "" || targetURL.Host == "" {
+-		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url url=%q", strings.TrimSpace(body.URL))
++	if err != nil {
++		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url target=%s", redactedTarget)
+ 		writeJSONError(w, http.StatusBadRequest, "url must be a full URL")
+ 		return
+ 	}
++	if err := journalproxy.ValidateBaseURL(targetURL); err != nil {
++		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url target=%s err=%v", redactedTarget, err)
++		writeJSONError(w, http.StatusBadRequest, err.Error())
++		return
++	}
+ 
+ 	baseCtx, baseCancel := s.requestContext(r.Context())
+ 	defer baseCancel()
+@@ -510,6 +516,9 @@ func toResolvedGatewayTarget(target runtimeconfig.GatewayTarget) (resolvedGatewa
+ 	if err != nil {
+ 		return resolvedGatewayTarget{}, err
+ 	}
++	if err := journalproxy.ValidateBaseURL(parsed); err != nil {
++		return resolvedGatewayTarget{}, err
++	}
+ 	headers := make([]journalproxy.Header, 0, len(target.Headers))
+ 	for _, header := range target.Headers {
+ 		headers = append(headers, journalproxy.Header{Name: header.Name, Value: header.Value})
+@@ -731,6 +740,14 @@ func redactURLForLog(target *url.URL) string {
+ 	return fmt.Sprintf("%s://%s", target.Scheme, target.Host)
+ }
+ 
++func redactURLStringForLog(raw string) string {
++	target, err := url.Parse(strings.TrimSpace(raw))
++	if err != nil {
++		return "<invalid-url>"
++	}
++	return redactURLForLog(target)
++}
++
+ func (s *Server) logInfof(r *http.Request, route string, format string, args ...any) {
+ 	s.logf("info", r, route, format, args...)
+ }

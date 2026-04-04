@@ -1,7 +1,9 @@
 package journalproxy
 
 import (
+	"context"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -144,5 +146,49 @@ func TestBuildEntriesURLAndHelpers(t *testing.T) {
 	}
 	if joinPath("/api/", "/entries/", "") != "/api/entries" {
 		t.Fatalf("joinPath returned unexpected value")
+	}
+}
+
+func TestValidateBaseURLRejectsUnsafeTargets(t *testing.T) {
+	testCases := []struct {
+		name   string
+		rawURL string
+		want   string
+	}{
+		{name: "nil", want: "required"},
+		{name: "relative", rawURL: "/api", want: "absolute"},
+		{name: "unsupported scheme", rawURL: "ftp://gateway.example.com", want: "http or https"},
+		{name: "userinfo", rawURL: "https://user:pass@gateway.example.com", want: "user info"},
+		{name: "fragment", rawURL: "https://gateway.example.com/api#frag", want: "fragment"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var parsed *url.URL
+			if tc.rawURL != "" {
+				var err error
+				parsed, err = url.Parse(tc.rawURL)
+				if err != nil {
+					t.Fatalf("url.Parse() error = %v", err)
+				}
+			}
+			err := ValidateBaseURL(parsed)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidateBaseURL() error = %v, want substring %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFetchLogsRejectsUnsafeTargetBeforeNetworkRequest(t *testing.T) {
+	client := NewClient(nil)
+	targetURL, err := url.Parse("ftp://gateway.example.com")
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	_, err = client.FetchLogs(context.Background(), RequestTarget{BaseURL: targetURL}, LogQuery{Limit: 1})
+	if err == nil || !strings.Contains(err.Error(), "http or https") {
+		t.Fatalf("FetchLogs() error = %v, want unsupported scheme error", err)
 	}
 }

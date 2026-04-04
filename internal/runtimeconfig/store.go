@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"journal-scope/internal/config"
+	"journal-scope/internal/journalproxy"
 	"journal-scope/internal/security"
 )
 
@@ -308,8 +309,12 @@ func (s *Store) validateLocked() error {
 		if strings.TrimSpace(target.URL) == "" {
 			return fmt.Errorf("runtime config gateway target missing url")
 		}
-		if parsed, err := url.Parse(target.URL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		parsed, err := url.Parse(target.URL)
+		if err != nil {
 			return fmt.Errorf("runtime config gateway target url must be a full URL")
+		}
+		if err := journalproxy.ValidateBaseURL(parsed); err != nil {
+			return fmt.Errorf("runtime config gateway target url is invalid: %w", err)
 		}
 		if strings.TrimSpace(target.TLSServerName) != "" {
 			if strings.ContainsAny(strings.TrimSpace(target.TLSServerName), "/:\\") {
@@ -383,8 +388,11 @@ func normalizeTargets(targets []GatewayTarget) ([]GatewayTarget, error) {
 			return nil, fmt.Errorf("duplicate gateway target id: %s", id)
 		}
 		parsed, err := url.Parse(rawURL)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		if err != nil {
 			return nil, fmt.Errorf("gateway target url must be a full URL")
+		}
+		if err := journalproxy.ValidateBaseURL(parsed); err != nil {
+			return nil, fmt.Errorf("gateway target url is invalid: %w", err)
 		}
 		headers, err := normalizeHeaders(target.Headers)
 		if err != nil {

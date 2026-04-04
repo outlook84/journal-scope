@@ -41,6 +41,9 @@ func TestNormalizeTargetsRejectsInvalidInput(t *testing.T) {
 	if _, err := normalizeTargets([]GatewayTarget{{ID: "a", Name: "A", URL: "not-a-url"}}); err == nil {
 		t.Fatalf("expected invalid URL to fail")
 	}
+	if _, err := normalizeTargets([]GatewayTarget{{ID: "a", Name: "A", URL: "ftp://a.example.com"}}); err == nil {
+		t.Fatalf("expected unsupported URL scheme to fail")
+	}
 	if _, err := normalizeTargets([]GatewayTarget{
 		{ID: "dup", Name: "A", URL: "https://a.example.com"},
 		{ID: "dup", Name: "B", URL: "https://b.example.com"},

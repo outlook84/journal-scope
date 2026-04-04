@@ -327,10 +327,16 @@ func (s *Server) handleTestGateway(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid gateway test payload")
 		return
 	}
+	redactedTarget := redactURLStringForLog(body.URL)
 	targetURL, err := url.Parse(strings.TrimSpace(body.URL))
-	if err != nil || targetURL.Scheme == "" || targetURL.Host == "" {
-		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url url=%q", strings.TrimSpace(body.URL))
+	if err != nil {
+		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url target=%s", redactedTarget)
 		writeJSONError(w, http.StatusBadRequest, "url must be a full URL")
+		return
+	}
+	if err := journalproxy.ValidateBaseURL(targetURL); err != nil {
+		s.logWarnf(r, "/api/admin/test-gateway", "gateway test rejected: invalid url target=%s err=%v", redactedTarget, err)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -508,6 +514,9 @@ func (s *Server) activeGatewayTargetID(r *http.Request) string {
 func toResolvedGatewayTarget(target runtimeconfig.GatewayTarget) (resolvedGatewayTarget, error) {
 	parsed, err := url.Parse(target.URL)
 	if err != nil {
+		return resolvedGatewayTarget{}, err
+	}
+	if err := journalproxy.ValidateBaseURL(parsed); err != nil {
 		return resolvedGatewayTarget{}, err
 	}
 	headers := make([]journalproxy.Header, 0, len(target.Headers))
@@ -729,6 +738,14 @@ func redactURLForLog(target *url.URL) string {
 		return ""
 	}
 	return fmt.Sprintf("%s://%s", target.Scheme, target.Host)
+}
+
+func redactURLStringForLog(raw string) string {
+	target, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "<invalid-url>"
+	}
+	return redactURLForLog(target)
 }
 
 func (s *Server) logInfof(r *http.Request, route string, format string, args ...any) {
