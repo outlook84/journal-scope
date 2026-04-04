@@ -261,8 +261,11 @@ func (s *Server) handleBootSummaries(w http.ResponseWriter, r *http.Request) {
 		cacheKey = target.BaseURL.String()
 	}
 
+	ctx, cancel := s.requestContext(r.Context())
+	defer cancel()
+
 	summaries, err := s.bootSummaryCache.getOrLoad(cacheKey, func() ([]bootSummary, error) {
-		return s.loadBootSummaries(r.Context(), target)
+		return s.loadBootSummaries(ctx, target)
 	})
 	if err != nil {
 		s.logWarnf(r, "/api/fields/boot-ids/meta", "boot summaries fetch failed target=%s err=%v", redactURLForLog(target.BaseURL), err)

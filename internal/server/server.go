@@ -27,15 +27,16 @@ import (
 )
 
 type Server struct {
-	cfg            config.Config
-	journal        *journalproxy.Client
-	sessionManager *security.SessionManager
-	runtimeConfig  *runtimeconfig.Store
-	loginLimiter   *loginRateLimiter
+	cfg              config.Config
+	journal          *journalproxy.Client
+	sessionManager   *security.SessionManager
+	runtimeConfig    *runtimeconfig.Store
+	shutdownCtx      context.Context
+	loginLimiter     *loginRateLimiter
 	bootSummaryCache *bootSummaryCache
-	staticFS       fs.FS
-	staticServer   http.Handler
-	staticFound    bool
+	staticFS         fs.FS
+	staticServer     http.Handler
+	staticFound      bool
 }
 
 const mutationIntentHeader = "X-Journal-Scope-Intent"
@@ -66,13 +67,14 @@ type resolvedGatewayTarget struct {
 	TLSServerName string
 }
 
-func New(cfg config.Config, runtimeConfig *runtimeconfig.Store, journal *journalproxy.Client, sessionManager *security.SessionManager) (http.Handler, error) {
+func New(cfg config.Config, runtimeConfig *runtimeconfig.Store, journal *journalproxy.Client, sessionManager *security.SessionManager, shutdownCtx context.Context) (http.Handler, error) {
 	s := &Server{
-		cfg:            cfg,
-		journal:        journal,
-		sessionManager: sessionManager,
-		runtimeConfig:  runtimeConfig,
-		loginLimiter:   newLoginRateLimiter(),
+		cfg:              cfg,
+		journal:          journal,
+		sessionManager:   sessionManager,
+		runtimeConfig:    runtimeConfig,
+		shutdownCtx:      shutdownCtx,
+		loginLimiter:     newLoginRateLimiter(),
 		bootSummaryCache: newBootSummaryCache(bootSummaryCacheTTL),
 	}
 
@@ -111,6 +113,19 @@ func New(cfg config.Config, runtimeConfig *runtimeconfig.Store, journal *journal
 	mux.HandleFunc("/", s.handleApp)
 
 	return mux, nil
+}
+
+func (s *Server) requestContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	if s.shutdownCtx == nil {
+		return ctx, cancel
+	}
+
+	stop := context.AfterFunc(s.shutdownCtx, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +334,10 @@ func (s *Server) handleTestGateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	baseCtx, baseCancel := s.requestContext(r.Context())
+	defer baseCancel()
+
+	ctx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
 	defer cancel()
 
 	headers := make([]journalproxy.Header, 0, len(body.Headers))
@@ -372,7 +390,10 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.journal.FetchLogs(r.Context(), journalproxy.RequestTarget{
+	ctx, cancel := s.requestContext(r.Context())
+	defer cancel()
+
+	resp, err := s.journal.FetchLogs(ctx, journalproxy.RequestTarget{
 		BaseURL:       target.BaseURL,
 		Headers:       target.Headers,
 		TLSServerName: target.TLSServerName,
@@ -411,7 +432,10 @@ func (s *Server) handleTailLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.journal.TailLogs(r.Context(), journalproxy.RequestTarget{
+	ctx, cancel := s.requestContext(r.Context())
+	defer cancel()
+
+	resp, err := s.journal.TailLogs(ctx, journalproxy.RequestTarget{
 		BaseURL:       target.BaseURL,
 		Headers:       target.Headers,
 		TLSServerName: target.TLSServerName,
@@ -440,7 +464,10 @@ func (s *Server) handleFieldValues(fieldName string) http.HandlerFunc {
 			return
 		}
 
-		resp, err := s.journal.FetchFieldValues(r.Context(), journalproxy.RequestTarget{
+		ctx, cancel := s.requestContext(r.Context())
+		defer cancel()
+
+		resp, err := s.journal.FetchFieldValues(ctx, journalproxy.RequestTarget{
 			BaseURL:       target.BaseURL,
 			Headers:       target.Headers,
 			TLSServerName: target.TLSServerName,

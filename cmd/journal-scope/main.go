@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +29,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("load runtime config: %v", err)
 	}
+
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	if bootstrap.Created {
 		log.Printf("initialized runtime config in %s", cfg.DataDir)
@@ -59,7 +63,7 @@ func main() {
 
 	proxyClient := journalproxy.NewClient(transport)
 	sessionManager := security.NewSessionManager(sessionSecret, cfg.SessionTTL, cfg.CookieSecure)
-	handler, err := server.New(cfg, store, proxyClient, sessionManager)
+	handler, err := server.New(cfg, store, proxyClient, sessionManager, shutdownCtx)
 	if err != nil {
 		log.Fatalf("build server: %v", err)
 	}
@@ -80,34 +84,45 @@ func main() {
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 	}
 
+	if err := serveHTTPServer(srv, nil, shutdownCtx, 10*time.Second); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func serveHTTPServer(srv *http.Server, listener net.Listener, shutdownCtx context.Context, drainTimeout time.Duration) error {
 	serveErrCh := make(chan error, 1)
 	go func() {
+		if listener != nil {
+			serveErrCh <- srv.Serve(listener)
+			return
+		}
 		serveErrCh <- srv.ListenAndServe()
 	}()
-
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	select {
 	case err := <-serveErrCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("serve http: %v", err)
+			return errors.New("serve http: " + err.Error())
 		}
-		return
+		return nil
 	case <-shutdownCtx.Done():
 		log.Printf("received shutdown signal, stopping server")
 	}
 
-	drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	drainCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(drainCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("shutdown server: %v", err)
+		log.Printf("graceful shutdown did not finish cleanly: %v", err)
+		if closeErr := srv.Close(); closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
+			return errors.New("force close server: " + closeErr.Error())
+		}
 	}
 
 	if err := <-serveErrCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("serve http after shutdown: %v", err)
+		return errors.New("serve http after shutdown: " + err.Error())
 	}
 
 	log.Printf("journal-scope stopped")
+	return nil
 }

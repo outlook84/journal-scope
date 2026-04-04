@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -96,7 +97,7 @@ func newAuthedServerHandler(t *testing.T, gatewayURL string) http.Handler {
 	}
 
 	sessionManager := security.NewSessionManager("test-secret", time.Hour, false)
-	handler, err := New(cfg, store, journalproxy.NewClient(nil), sessionManager)
+	handler, err := New(cfg, store, journalproxy.NewClient(nil), sessionManager, context.Background())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
