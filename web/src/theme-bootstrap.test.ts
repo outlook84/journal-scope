@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest"
 import indexHtml from "../index.html?raw"
 
 function extractInlineBootstrapScript(html: string) {
-  const match = html.match(/<script>\s*([\s\S]*?)\s*<\/script>/)
-  if (!match?.[1]) {
+  const normalizedHtml = html.toLowerCase()
+  const openTagStart = normalizedHtml.indexOf("<script")
+  const openTagEnd = normalizedHtml.indexOf(">", openTagStart)
+  const closeTagStart = normalizedHtml.indexOf("</script>", openTagEnd)
+
+  if (openTagStart === -1 || openTagEnd === -1 || closeTagStart === -1) {
     throw new Error("inline bootstrap script not found in index.html")
   }
-  return match[1]
+
+  return html.slice(openTagEnd + 1, closeTagStart).trim()
 }
 
 describe("index theme bootstrap script", () => {
