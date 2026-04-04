@@ -1,0 +1,15 @@
+services:
+  journal-scope:
+    build: .
+    ports:
+      - "3030:3030"
+    environment:
+      JOURNAL_SCOPE_BOOTSTRAP_GATEWAY_URL: http://host.docker.internal:19531
+      JOURNAL_SCOPE_COOKIE_SECURE: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - journal-scope-data:/data
+
+volumes:
+  journal-scope-data:

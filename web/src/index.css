@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  html[data-theme='dark'] {
+    --color-primary-fixed-dim: 158 202 255;
+    --color-primary: 158 202 255;
+    --color-primary-light: 184 216 255;
+    --color-on-primary: 11 19 38;
+    --color-tertiary: 255 183 123;
+    --color-background: 11 19 38;
+    --color-surface: 11 19 38;
+    --color-surface-variant: 45 52 73;
+    --color-surface-container-lowest: 6 14 32;
+    --color-surface-container-low: 19 27 46;
+    --color-surface-container: 23 31 51;
+    --color-surface-container-high: 34 42 61;
+    --color-surface-container-highest: 45 52 73;
+    --color-on-surface: 218 226 253;
+    --color-on-surface-variant: 191 199 212;
+    --color-outline-variant: 64 71 82;
+    --color-outline: 137 145 157;
+    --color-error: 255 180 171;
+    --color-error-container: 147 0 10;
+    --color-on-error-container: 255 218 214;
+  }
+
+  html[data-theme='light'] {
+    --color-primary-fixed-dim: 59 91 166;
+    --color-primary: 67 103 186;
+    --color-primary-light: 90 124 204;
+    --color-on-primary: 255 255 255;
+    --color-tertiary: 120 76 180;
+    --color-background: 240 243 250;
+    --color-surface: 248 250 255;
+    --color-surface-variant: 218 224 238;
+    --color-surface-container-lowest: 255 255 255;
+    --color-surface-container-low: 244 246 252;
+    --color-surface-container: 236 240 250;
+    --color-surface-container-high: 224 230 244;
+    --color-surface-container-highest: 208 216 236;
+    --color-on-surface: 18 24 40;
+    --color-on-surface-variant: 52 64 96;
+    --color-outline-variant: 175 188 218;
+    --color-outline: 108 124 162;
+    --color-error: 185 67 58;
+    --color-error-container: 255 225 222;
+    --color-on-error-container: 100 20 16;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at top left, rgb(var(--color-primary) / 0.16), transparent 36%),
+      radial-gradient(circle at 85% 18%, rgb(var(--color-tertiary) / 0.12), transparent 30%),
+      linear-gradient(180deg, rgb(var(--color-surface)) 0%, rgb(var(--color-background)) 100%);
+    color: rgb(var(--color-on-surface));
+  }
+
+  :lang(zh-CN) body {
+    font-family: "Bahnschrift", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
+  }
+
+  ::selection {
+    background: rgb(var(--color-primary) / 0.2);
+    color: rgb(var(--color-on-surface));
+  }
+}
+
+@layer components {
+  .ui-label {
+    @apply mb-2 block text-xs font-medium;
+    color: rgb(var(--color-on-surface-variant) / 0.82);
+    letter-spacing: 0.02em;
+  }
+
+  :lang(zh-CN) .ui-label {
+    @apply text-sm;
+  }
+
+  :lang(en) .ui-label {
+    color: rgb(var(--color-on-surface-variant) / 0.72);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .ui-action-caption {
+    @apply text-xs font-medium transition-colors;
+    color: rgb(var(--color-on-surface-variant) / 0.78);
+    letter-spacing: 0.01em;
+  }
+
+  :lang(zh-CN) .ui-action-caption {
+    @apply text-sm;
+  }
+
+  :lang(en) .ui-action-caption {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .ui-menu-heading {
+    @apply px-3 py-2 text-xs font-medium;
+    color: rgb(var(--color-on-surface-variant) / 0.7);
+    letter-spacing: 0.03em;
+  }
+
+  :lang(zh-CN) .ui-menu-heading {
+    @apply text-sm;
+  }
+
+  :lang(en) .ui-menu-heading {
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .ui-table-head {
+    @apply text-xs font-bold;
+    color: rgb(var(--color-on-surface-variant) / 0.78);
+    letter-spacing: 0.04em;
+  }
+
+  :lang(zh-CN) .ui-table-head {
+    @apply text-sm;
+  }
+
+  :lang(en) .ui-table-head {
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+
+  html[data-theme='light'] input::placeholder {
+    color: rgb(var(--color-on-surface-variant) / 0.72);
+  }
+
+  html[data-theme='light'] select,
+  html[data-theme='light'] option {
+    color: rgb(var(--color-on-surface));
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0px 1000px rgb(var(--color-surface-container-highest)) inset !important;
+    -webkit-text-fill-color: rgb(var(--color-on-surface)) !important;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+}
+
+@layer utilities {
+  .log-scrollbar { scrollbar-width: auto; scrollbar-color: rgb(var(--color-outline)) transparent; scrollbar-gutter: stable; }
+  .log-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+  .log-scrollbar::-webkit-scrollbar-track { background: rgb(var(--color-outline-variant) / 0.24); border-radius: 999px; }
+  .log-scrollbar::-webkit-scrollbar-thumb { background: rgb(var(--color-outline)); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+  .log-scrollbar::-webkit-scrollbar-thumb:hover { background: rgb(var(--color-primary-light)); background-clip: content-box; }
+}

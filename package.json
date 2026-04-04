@@ -1,0 +1,29 @@
+{
+  "name": "stitch-root",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "pnpm --dir web dev",
+    "dev:web": "pnpm --dir web dev",
+    "dev:api": "go run ./cmd/journal-scope",
+    "build": "pnpm --dir web build",
+    "build:web": "pnpm --dir web build",
+    "build:api": "go build -trimpath -ldflags=\"-s -w\" -o ./bin/journal-scope.exe ./cmd/journal-scope",
+    "preview": "pnpm --dir web preview",
+    "test": "pnpm test:go && pnpm test:web",
+    "test:go": "go test ./...",
+    "test:web": "pnpm --dir web test",
+    "lint": "pnpm --dir web lint",
+    "lint:typecheck": "pnpm --dir web lint:typecheck",
+    "lint:eslint": "pnpm --dir web lint:eslint"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.25.0",
+      "minimatch@>=9.0.0 <9.0.7": "9.0.7"
+    }
+  }
+}

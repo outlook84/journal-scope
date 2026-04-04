@@ -1,0 +1,14 @@
+FROM alpine:3.23 AS certs
+RUN apk add --no-cache ca-certificates
+
+FROM busybox:1.36
+RUN mkdir -p /data
+
+COPY --from=certs /etc/ssl/certs /etc/ssl/certs
+COPY journal-scope /usr/local/bin/journal-scope
+
+ENV JOURNAL_SCOPE_LISTEN_ADDR=0.0.0.0:3030 \
+    JOURNAL_SCOPE_DATA_DIR=/data
+
+EXPOSE 3030
+CMD ["journal-scope"]

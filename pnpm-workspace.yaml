@@ -1,0 +1,4 @@
+packages:
+  - web
+
+minimumReleaseAge: 4320

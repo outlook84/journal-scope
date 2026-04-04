@@ -1,0 +1,14 @@
+node_modules
+web/node_modules
+.pnpm-store
+.gocache
+dist
+web/dist
+.git
+.github
+journal-scope
+journal-scope.exe
+data
+bin
+*.log
+*.tsbuildinfo
