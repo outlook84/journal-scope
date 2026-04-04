@@ -8,8 +8,8 @@ web/dist/*
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
-journal-scope
-journal-scope.exe
+/journal-scope
+/journal-scope.exe
 bin/
 data/
 coverage/
