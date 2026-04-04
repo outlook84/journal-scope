@@ -49,6 +49,7 @@ describe('TopBarControls', () => {
   const baseProps = {
     activeGatewayTarget: { id: 'a', name: 'Primary', url: 'https://gateway.example' },
     activeGatewayTargetId: 'a',
+    appVersion: 'v1.2.3',
     currentPage: 'logs' as const,
     desktopSessionMenuRef: createRef<HTMLDivElement>(),
     gatewayTargets: [{ id: 'a', name: 'Primary', url: 'https://gateway.example' }],
@@ -167,6 +168,7 @@ describe('TopBarControls', () => {
 
     expect(markup).toContain('语言');
     expect(markup).toContain('退出登录');
+    expect(markup).toContain('版本 v1.2.3');
     expect(markup).not.toContain('当前身份');
   });
 });

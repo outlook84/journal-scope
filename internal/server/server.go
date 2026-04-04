@@ -185,6 +185,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"role":            string(role),
 		"gatewayTargetId": s.runtimeConfig.DefaultGatewayTargetID(),
+		"version":         journalscope.Version,
 	})
 }
 
@@ -223,6 +224,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"role":            string(claims.Role),
 		"gatewayTargetId": activeTargetID,
+		"version":         journalscope.Version,
 	})
 }
 

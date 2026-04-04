@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	journalscope "journal-scope"
 	"journal-scope/internal/config"
 	"journal-scope/internal/journalproxy"
 	"journal-scope/internal/runtimeconfig"
@@ -51,7 +52,70 @@ func TestHandleTestGatewayProbesMachineEndpoint(t *testing.T) {
 	}
 }
 
+func TestHandleSessionReturnsVersion(t *testing.T) {
+	handler := newViewerServerHandler(t, "https://gateway.example")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var body map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if body["role"] != "viewer" {
+		t.Fatalf("role = %q, want viewer", body["role"])
+	}
+	if body["version"] != journalscope.Version {
+		t.Fatalf("version = %q, want %q", body["version"], journalscope.Version)
+	}
+}
+
+func TestHandleLoginReturnsVersion(t *testing.T) {
+	handler := newUnauthedServerHandler(t, "https://gateway.example")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"accessCode":"admin-code"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(mutationIntentHeader, mutationIntentValue)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var body map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if body["role"] != "admin" {
+		t.Fatalf("role = %q, want admin", body["role"])
+	}
+	if body["version"] != journalscope.Version {
+		t.Fatalf("version = %q, want %q", body["version"], journalscope.Version)
+	}
+}
+
 func newAdminServerHandler(t *testing.T, gatewayURL string) http.Handler {
+	t.Helper()
+	return newSessionServerHandler(t, gatewayURL, security.RoleAdmin, true)
+}
+
+func newViewerServerHandler(t *testing.T, gatewayURL string) http.Handler {
+	t.Helper()
+	return newSessionServerHandler(t, gatewayURL, security.RoleViewer, true)
+}
+
+func newUnauthedServerHandler(t *testing.T, gatewayURL string) http.Handler {
+	t.Helper()
+	return newSessionServerHandler(t, gatewayURL, "", false)
+}
+
+func newSessionServerHandler(t *testing.T, gatewayURL string, role security.Role, addSession bool) http.Handler {
 	t.Helper()
 
 	parsedGatewayURL, err := url.Parse(gatewayURL)
@@ -80,12 +144,14 @@ func newAdminServerHandler(t *testing.T, gatewayURL string) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		recorder := httptest.NewRecorder()
-		if err := sessionManager.SetSession(recorder, security.RoleAdmin); err != nil {
-			t.Fatalf("SetSession() error = %v", err)
-		}
-		for _, cookie := range recorder.Result().Cookies() {
-			r.AddCookie(cookie)
+		if addSession {
+			recorder := httptest.NewRecorder()
+			if err := sessionManager.SetSession(recorder, role); err != nil {
+				t.Fatalf("SetSession() error = %v", err)
+			}
+			for _, cookie := range recorder.Result().Cookies() {
+				r.AddCookie(cookie)
+			}
 		}
 		handler.ServeHTTP(w, r)
 	})

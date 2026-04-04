@@ -74,6 +74,10 @@ export type QueryConfig = {
 export type SessionRole = 'viewer' | 'admin';
 export type SessionState = 'checking' | 'authenticated' | 'unauthenticated';
 export type AppPage = 'logs' | 'backend';
+export type SessionPayload = {
+  role?: SessionRole;
+  version?: string;
+};
 
 export type GatewayHeader = {
   name: string;

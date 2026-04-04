@@ -9,6 +9,7 @@ import { TimeRangeControl } from './TimeRangeControl';
 type TopBarControlsProps = {
   activeGatewayTarget: GatewayTarget | null;
   activeGatewayTargetId: string;
+  appVersion: string;
   currentPage: AppPage;
   desktopSessionMenuRef: React.RefObject<HTMLDivElement | null>;
   gatewayTargets: GatewayTarget[];
@@ -40,6 +41,7 @@ type TopBarControlsProps = {
 export function TopBarControls({
   activeGatewayTarget,
   activeGatewayTargetId,
+  appVersion,
   currentPage,
   desktopSessionMenuRef,
   gatewayTargets,
@@ -205,6 +207,12 @@ export function TopBarControls({
           ))}
         </div>
       ) : null}
+
+      <div className="mx-3 border-t border-outline-variant/15" />
+
+      <div className="px-3 py-2 text-sm leading-none text-on-surface-variant/45">
+        {messages.version} {appVersion}
+      </div>
 
       <div className="mx-3 border-t border-outline-variant/15" />
 
