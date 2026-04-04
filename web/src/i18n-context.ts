@@ -9,6 +9,7 @@ type Messages = {
   appName: string;
   sessionRole: (role: SessionRole) => string;
   sessionRoleMenuLabel: (role: SessionRole) => string;
+  version: string;
   authChecking: string;
   authPrompt: string;
   accessCode: string;
@@ -167,6 +168,7 @@ const messages: Record<SupportedLocale, Messages> = {
     appName: 'Journal Scope',
     sessionRole: (role) => role === 'admin' ? 'Admin' : 'Viewer',
     sessionRoleMenuLabel: (role) => role === 'admin' ? 'admin' : 'viewer',
+    version: 'Version',
     authChecking: 'Checking current session…',
     authPrompt: 'Enter a viewer or admin access code to unlock the log view.',
     accessCode: 'Access Code',
@@ -298,6 +300,7 @@ const messages: Record<SupportedLocale, Messages> = {
     appName: 'Journal Scope',
     sessionRole: (role) => role === 'admin' ? '管理员' : '访客',
     sessionRoleMenuLabel: (role) => role === 'admin' ? '管理员' : '访客',
+    version: '版本',
     authChecking: '正在检查当前会话…',
     authPrompt: '输入访客或管理员访问码以解锁日志视图。',
     accessCode: '访问码',

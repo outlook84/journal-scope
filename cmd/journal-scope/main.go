@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	journalscope "journal-scope"
 	"journal-scope/internal/config"
 	"journal-scope/internal/gatewaytls"
 	"journal-scope/internal/journalproxy"
@@ -73,6 +74,7 @@ func main() {
 	}
 
 	log.Printf("journal-scope listening on http://%s", cfg.ListenAddr)
+	log.Printf("journal-scope version %s", journalscope.Version)
 	log.Printf("proxying journal requests to %s", defaultTarget.URL)
 	if cfg.TrustProxyHeaders {
 		log.Printf("warning: JOURNAL_SCOPE_TRUST_PROXY_HEADERS=true; only enable this behind a trusted reverse proxy that overwrites X-Forwarded-For")

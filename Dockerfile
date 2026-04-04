@@ -11,13 +11,15 @@ RUN pnpm build:web
 FROM golang:1.26.1-alpine AS go-build
 WORKDIR /app
 
+ARG JOURNAL_SCOPE_VERSION=dev
+
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 COPY --from=web-build /app/web/dist ./web/dist
 RUN apk add --no-cache ca-certificates && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/journal-scope ./cmd/journal-scope
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X journal-scope.Version=${JOURNAL_SCOPE_VERSION}" -o /out/journal-scope ./cmd/journal-scope
 
 FROM busybox:1.37
 RUN mkdir -p /data

@@ -11,7 +11,7 @@
     "dev:api": "go run ./cmd/journal-scope",
     "build": "pnpm --dir web build",
     "build:web": "pnpm --dir web build",
-    "build:api": "go build -trimpath -ldflags=\"-s -w\" -o ./bin/journal-scope.exe ./cmd/journal-scope",
+    "build:api": "go build -trimpath -ldflags=\"-s -w -X journal-scope.Version=dev\" -o ./bin/journal-scope.exe ./cmd/journal-scope",
     "preview": "pnpm --dir web preview",
     "test": "pnpm test:go && pnpm test:web",
     "test:go": "go test ./...",

@@ -18,7 +18,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X journal-scope.Version={{ .Tag }}
 
 archives:
   - id: binaries

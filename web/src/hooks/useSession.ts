@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import type { SupportedLocale } from '../i18n-context';
 import { getMessages } from '../i18n-context';
-import type { SessionRole, SessionState } from '../types/app';
+import type { SessionPayload, SessionRole, SessionState } from '../types/app';
 
 const MUTATION_INTENT_HEADER = 'X-Journal-Scope-Intent';
 const MUTATION_INTENT_VALUE = 'mutate';
@@ -26,6 +26,7 @@ export function useSession({
 }: UseSessionOptions) {
   const copy = getMessages(locale);
   const [authState, setAuthState] = useState<SessionState>('checking');
+  const [appVersion, setAppVersion] = useState('dev');
   const [sessionRole, setSessionRole] = useState<SessionRole | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
@@ -76,10 +77,11 @@ export function useSession({
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const session = await res.json() as { role?: SessionRole };
+      const session = await res.json() as SessionPayload;
       if (session.role !== 'admin' && session.role !== 'viewer') {
         throw new Error(copy.invalidSessionResponse);
       }
+      setAppVersion((session.version ?? '').trim() || 'dev');
       setSessionRole(session.role);
       setAuthState('authenticated');
       setLastError(null);
@@ -121,11 +123,12 @@ export function useSession({
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const session = await res.json() as { role?: SessionRole };
+      const session = await res.json() as SessionPayload;
       if (session.role !== 'admin' && session.role !== 'viewer') {
         throw new Error(copy.invalidLoginResponse);
       }
       setAccessCodeInput('');
+      setAppVersion((session.version ?? '').trim() || 'dev');
       setSessionRole(session.role);
       setAuthState('authenticated');
       setLastError(null);
@@ -163,6 +166,7 @@ export function useSession({
 
   return {
     accessCodeInput,
+    appVersion,
     apiFetch,
     authError,
     authState,

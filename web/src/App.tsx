@@ -54,6 +54,7 @@ export default function App() {
 
   const {
     accessCodeInput,
+    appVersion,
     apiFetch,
     authError,
     authState,
@@ -460,6 +461,7 @@ export default function App() {
           <TopBarControls
             activeGatewayTarget={activeGatewayTarget}
             activeGatewayTargetId={activeGatewayTargetId}
+            appVersion={appVersion}
             currentPage={currentPage}
             desktopSessionMenuRef={desktopSessionMenuRef}
             gatewayTargets={gatewayTargets}
@@ -687,6 +689,7 @@ export default function App() {
             <TopBarControls
               activeGatewayTarget={activeGatewayTarget}
               activeGatewayTargetId={activeGatewayTargetId}
+              appVersion={appVersion}
               currentPage={currentPage}
               desktopSessionMenuRef={desktopSessionMenuRef}
               gatewayTargets={gatewayTargets}
