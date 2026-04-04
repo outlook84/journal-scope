@@ -51,7 +51,7 @@ ListenStream=
 ListenStream=127.0.0.1:19531
 ```
 > [!TIP]
-> Configuring mTLS is a more secure option. However, please note that `systemd-journal-gatewayd` in Debian and its derivatives currently has a known bug that prevents mTLS from working correctly (see [Debian Bug #1100729](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1100729)).
+> Configuring mTLS is a more secure option. However, please note that `systemd-journal-gatewayd` in Debian currently has a known bug that prevents mTLS from working correctly (see [Debian Bug #1100729](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1100729)).
 
 ### 2. Run Journal Scope
 
