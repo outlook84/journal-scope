@@ -2,6 +2,9 @@ package journalproxy
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -190,5 +193,50 @@ func TestFetchLogsRejectsUnsafeTargetBeforeNetworkRequest(t *testing.T) {
 	_, err = client.FetchLogs(context.Background(), RequestTarget{BaseURL: targetURL}, LogQuery{Limit: 1})
 	if err == nil || !strings.Contains(err.Error(), "http or https") {
 		t.Fatalf("FetchLogs() error = %v, want unsupported scheme error", err)
+	}
+}
+
+func TestProbeGatewayReturnsIdentity(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/machine" {
+			t.Fatalf("Path = %q, want /machine", r.URL.Path)
+		}
+		if got := r.Header.Get("Accept"); got != "application/json" {
+			t.Fatalf("Accept = %q, want application/json", got)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"machine_id":"machine-1","boot_id":"boot-1","hostname":"host-1","cutoff_from_realtime":"1","cutoff_to_realtime":"2"}`)
+	}))
+	defer upstream.Close()
+
+	targetURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	identity, err := NewClient(nil).ProbeGateway(context.Background(), RequestTarget{BaseURL: targetURL})
+	if err != nil {
+		t.Fatalf("ProbeGateway() error = %v", err)
+	}
+	if identity.Hostname != "host-1" || identity.MachineID != "machine-1" {
+		t.Fatalf("unexpected identity: %+v", identity)
+	}
+}
+
+func TestProbeGatewayRejectsNonGatewayResponse(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"hostname":"host-1"}`)
+	}))
+	defer upstream.Close()
+
+	targetURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	_, err = NewClient(nil).ProbeGateway(context.Background(), RequestTarget{BaseURL: targetURL})
+	if err == nil || !strings.Contains(err.Error(), "machine_id") {
+		t.Fatalf("ProbeGateway() error = %v, want missing machine_id error", err)
 	}
 }

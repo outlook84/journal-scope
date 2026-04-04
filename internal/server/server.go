@@ -351,28 +351,22 @@ func (s *Server) handleTestGateway(w http.ResponseWriter, r *http.Request) {
 		headers = append(headers, journalproxy.Header{Name: header.Name, Value: header.Value})
 	}
 
-	resp, err := s.journal.FetchLogs(ctx, journalproxy.RequestTarget{
+	identity, err := s.journal.ProbeGateway(ctx, journalproxy.RequestTarget{
 		BaseURL:       targetURL,
 		Headers:       headers,
 		TLSServerName: strings.TrimSpace(body.TLSServerName),
-	}, journalproxy.LogQuery{Limit: 1})
+	})
 	if err != nil {
 		s.logWarnf(r, "/api/admin/test-gateway", "gateway test failed target=%s err=%v", redactURLForLog(targetURL), err)
-		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("connection failed: %v", err))
+		writeJSONError(w, http.StatusBadGateway, "gateway probe failed")
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.logWarnf(r, "/api/admin/test-gateway", "gateway test failed target=%s status=%d", redactURLForLog(targetURL), resp.StatusCode)
-		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("gateway returned HTTP %d", resp.StatusCode))
-		return
-	}
-	s.logInfof(r, "/api/admin/test-gateway", "gateway test succeeded target=%s status=%d", redactURLForLog(targetURL), resp.StatusCode)
+	s.logInfof(r, "/api/admin/test-gateway", "gateway test succeeded target=%s hostname=%s machine_id=%s", redactURLForLog(targetURL), identity.Hostname, identity.MachineID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"status": resp.StatusCode,
+		"ok":       true,
+		"hostname": identity.Hostname,
+		"machine":  identity.MachineID,
 	})
 }
 

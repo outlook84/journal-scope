@@ -3,7 +3,9 @@ package journalproxy
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -56,6 +58,17 @@ type LogQuery struct {
 type FieldMatch struct {
 	Field string
 	Value string
+}
+
+type GatewayIdentity struct {
+	MachineID          string `json:"machine_id"`
+	BootID             string `json:"boot_id"`
+	Hostname           string `json:"hostname"`
+	OSPrettyName       string `json:"os_pretty_name"`
+	Virtualization     string `json:"virtualization"`
+	Usage              string `json:"usage"`
+	CutoffFromRealtime string `json:"cutoff_from_realtime"`
+	CutoffToRealtime   string `json:"cutoff_to_realtime"`
 }
 
 func ValidateBaseURL(baseURL *url.URL) error {
@@ -229,6 +242,47 @@ func (c *Client) FetchFieldValues(ctx context.Context, target RequestTarget, fie
 	return client.Do(req)
 }
 
+func (c *Client) ProbeGateway(ctx context.Context, target RequestTarget) (GatewayIdentity, error) {
+	baseURL, err := validatedBaseURL(target.BaseURL)
+	if err != nil {
+		return GatewayIdentity{}, err
+	}
+	endpoint := cloneURL(baseURL)
+	endpoint.Path = joinPath(endpoint.Path, "machine")
+	endpoint.RawQuery = ""
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return GatewayIdentity{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	applyHeaders(req, target.Headers)
+
+	resp, err := c.clientForTarget(false, target).Do(req)
+	if err != nil {
+		return GatewayIdentity{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return GatewayIdentity{}, fmt.Errorf("gateway probe returned HTTP %d", resp.StatusCode)
+	}
+
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return GatewayIdentity{}, fmt.Errorf("gateway probe returned unexpected content type %q", resp.Header.Get("Content-Type"))
+	}
+
+	var identity GatewayIdentity
+	if err := json.NewDecoder(resp.Body).Decode(&identity); err != nil {
+		return GatewayIdentity{}, fmt.Errorf("decode gateway identity: %w", err)
+	}
+	if err := identity.Validate(); err != nil {
+		return GatewayIdentity{}, err
+	}
+	return identity, nil
+}
+
 func applyHeaders(req *http.Request, headers []Header) {
 	for _, header := range headers {
 		if header.Name == "" || header.Value == "" {
@@ -259,6 +313,19 @@ func (c *Client) clientForTarget(stream bool, target RequestTarget) *http.Client
 		client.Timeout = 30 * time.Second
 	}
 	return client
+}
+
+func (g GatewayIdentity) Validate() error {
+	if g.MachineID == "" {
+		return fmt.Errorf("gateway probe missing machine_id")
+	}
+	if g.BootID == "" {
+		return fmt.Errorf("gateway probe missing boot_id")
+	}
+	if g.Hostname == "" {
+		return fmt.Errorf("gateway probe missing hostname")
+	}
+	return nil
 }
 
 func (c *Client) buildEntriesURL(baseURL *url.URL, query LogQuery, follow bool) *url.URL {
