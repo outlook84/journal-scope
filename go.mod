@@ -1,6 +1,6 @@
 module journal-scope
 
-go 1.26.1
+go 1.26.2
 
 require github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78
 

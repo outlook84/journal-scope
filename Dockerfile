@@ -8,7 +8,7 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build:web
 
-FROM golang:1.26.1-alpine AS go-build
+FROM golang:1.26.2-alpine AS go-build
 WORKDIR /app
 
 ARG JOURNAL_SCOPE_VERSION=dev
