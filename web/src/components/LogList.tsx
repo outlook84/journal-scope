@@ -4,7 +4,7 @@ import { useI18n } from '../i18n-context';
 import { AnsiText } from './AnsiText';
 import { LOG_ROW_HEIGHT, VIRTUAL_OVERSCAN } from '../constants/app';
 import type { HighlightMatcher, LogEntry } from '../types/app';
-import { buildHighlightMatcher, formatTimestamp, getPriorityClasses } from '../utils/app';
+import { buildHighlightMatcher, formatTimestamp, getPriorityClasses, matchesHighlightMatcher } from '../utils/app';
 
 const LogRow = memo(function LogRow({
   log,
@@ -21,7 +21,7 @@ const LogRow = memo(function LogRow({
   const prio = getPriorityClasses(log.PRIORITY);
   const unit = log.SYSLOG_IDENTIFIER || log._COMM || log._SYSTEMD_UNIT || messages.unknownSource;
   const message = typeof log.MESSAGE === 'string' ? log.MESSAGE : String(log.MESSAGE);
-  const shouldHighlight = !!highlightMatcher && !!log._s?.includes(highlightMatcher.query);
+  const shouldHighlight = matchesHighlightMatcher(log._s, highlightMatcher);
 
   return (
     <div

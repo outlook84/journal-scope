@@ -70,6 +70,12 @@ type Messages = {
   live: string;
   removeFilter: (label: string) => string;
   addFieldOrKeyword: string;
+  filterHelp: string;
+  filterHelpTitle: string;
+  filterHelpIntro: string;
+  filterHelpExamples: Array<{ label: string; value: string }>;
+  searchQueryPipeUnsupported: string;
+  searchQueryHasUnmatchedQuote: string;
   resetFilters: string;
   viewingLiveEnd: string;
   showingLatestAtOrBefore: (dateTime: string) => string;
@@ -229,6 +235,17 @@ const messages: Record<SupportedLocale, Messages> = {
     live: 'Live',
     removeFilter: (label) => `Remove ${label}`,
     addFieldOrKeyword: 'Add FIELD=value or keyword',
+    filterHelp: 'Filter help',
+    filterHelpTitle: 'Filter examples',
+    filterHelpIntro: 'Mix field filters and keyword operators in the same bar.',
+    filterHelpExamples: [
+      { label: 'Field match', value: 'SYSLOG_IDENTIFIER=sshd' },
+      { label: 'Quoted field value', value: 'MESSAGE=\"connection reset by peer\"' },
+      { label: 'AND terms', value: 'error timeout' },
+      { label: 'Exclude phrase', value: 'error -\"retry later\"' }
+    ],
+    searchQueryPipeUnsupported: 'The | operator is not supported in search queries.',
+    searchQueryHasUnmatchedQuote: 'Search query has an unmatched quote.',
     resetFilters: 'Reset filters',
     viewingLiveEnd: 'Viewing the live end of the stream',
     showingLatestAtOrBefore: (dateTime) => `Showing latest matches at or before ${dateTime}`,
@@ -361,6 +378,17 @@ const messages: Record<SupportedLocale, Messages> = {
     live: '实时',
     removeFilter: (label) => `移除 ${label}`,
     addFieldOrKeyword: '添加 FIELD=value 或关键字',
+    filterHelp: '筛选帮助',
+    filterHelpTitle: '筛选示例',
+    filterHelpIntro: '同一个输入栏里可以混合字段筛选和关键字操作符。',
+    filterHelpExamples: [
+      { label: '字段匹配', value: 'SYSLOG_IDENTIFIER=sshd' },
+      { label: '带空格字段值', value: 'MESSAGE=\"connection reset by peer\"' },
+      { label: 'AND 关键字', value: 'error timeout' },
+      { label: '排除短语', value: 'error -\"retry later\"' }
+    ],
+    searchQueryPipeUnsupported: '搜索表达式不支持 | 运算符。',
+    searchQueryHasUnmatchedQuote: '搜索表达式中存在未闭合的引号。',
     resetFilters: '重置筛选',
     viewingLiveEnd: '正在查看实时日志流尾部',
     showingLatestAtOrBefore: (dateTime) => `显示 ${dateTime} 及之前的最新匹配结果`,

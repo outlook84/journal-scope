@@ -51,7 +51,6 @@ export type WorkerResponse = {
 };
 
 export type HighlightMatcher = {
-  query: string;
   regex: RegExp;
 };
 

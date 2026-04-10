@@ -14,7 +14,7 @@ import type {
   StoreRequest,
   WorkerResponse
 } from '../types/app';
-import { formatBootIdOption, getNowEndTimeInput, normalizeLog, parseFieldValues, toUnixSeconds } from '../utils/app';
+import { filterLogIndices, formatBootIdOption, getNowEndTimeInput, normalizeLog, parseFieldValues, toUnixSeconds } from '../utils/app';
 
 type LogFilters = {
   priorityFilter: string;
@@ -142,6 +142,26 @@ export function useLogData({
     setLastErrorRef.current = onSetLastError;
   }, [onSetLastError]);
 
+  const shouldRunClientFiltering =
+    logs.length > 0 &&
+    !(
+      filters.priorityFilter === 'all' &&
+      filters.unitFilter === 'all' &&
+      filters.syslogFilter === 'all' &&
+      filters.hostnameFilter === 'all' &&
+      filters.bootIdFilter === 'all' &&
+      filters.commFilter === 'all' &&
+      filters.transportFilter === 'all' &&
+      filters.pidFilter === '' &&
+      filters.uidFilter === '' &&
+      filters.gidFilter === '' &&
+      filters.debouncedSearchQuery === '' &&
+      filters.sortOrder === 'desc'
+    );
+
+  const visibleFilteredLogIndices = shouldRunClientFiltering ? filteredLogIndices : null;
+  const visibleIsFiltering = shouldRunClientFiltering ? isFiltering : false;
+
   const updateKnownTags = useCallback((logsChunk: LogEntry[]) => {
     let changedUnit = false;
     let changedSyslog = false;
@@ -224,44 +244,7 @@ export function useLogData({
               ? { id: -1 }
               : {
                 id: -1,
-                indices: (() => {
-                  const query = request.filters.query.toLowerCase();
-                  const result: number[] = [];
-                  const expressionGroups = request.filters.expressionFilters.reduce<Record<string, Set<string>>>((groups, filter) => {
-                    (groups[filter.field] ??= new Set()).add(filter.value);
-                    return groups;
-                  }, {});
-
-                  for (let index = 0; index < currentLogs.length; index++) {
-                    const log = currentLogs[index];
-                    if (request.filters.priorityFilter !== 'all' && String(log.PRIORITY) !== request.filters.priorityFilter) continue;
-                    if (request.filters.unitFilter !== 'all' && log._SYSTEMD_UNIT !== request.filters.unitFilter) continue;
-                    if (request.filters.syslogFilter !== 'all' && log.SYSLOG_IDENTIFIER !== request.filters.syslogFilter) continue;
-                    if (request.filters.hostnameFilter !== 'all' && String(log._HOSTNAME || '') !== request.filters.hostnameFilter) continue;
-                    if (request.filters.bootIdFilter !== 'all' && String(log._BOOT_ID || '') !== request.filters.bootIdFilter) continue;
-                    if (request.filters.commFilter !== 'all' && String(log._COMM || '') !== request.filters.commFilter) continue;
-                    if (request.filters.transportFilter !== 'all' && String(log._TRANSPORT || '') !== request.filters.transportFilter) continue;
-                    if (request.filters.pidFilter !== '' && String(log._PID || '') !== request.filters.pidFilter) continue;
-                    if (request.filters.uidFilter !== '' && String(log._UID || '') !== request.filters.uidFilter) continue;
-                    if (request.filters.gidFilter !== '' && String(log._GID || '') !== request.filters.gidFilter) continue;
-                    let matchesExpressionGroups = true;
-                    for (const field in expressionGroups) {
-                      if (!expressionGroups[field].has(String(log[field] ?? '').trim())) {
-                        matchesExpressionGroups = false;
-                        break;
-                      }
-                    }
-                    if (!matchesExpressionGroups) continue;
-                    if (query && !log._s?.includes(query)) continue;
-                    result.push(index);
-                  }
-
-                  if (request.filters.sortOrder === 'asc') {
-                    result.reverse();
-                  }
-
-                  return result;
-                })()
+                indices: filterLogIndices(currentLogs, request.filters)
               }
       );
     }
@@ -319,35 +302,16 @@ export function useLogData({
   }, []);
 
   useEffect(() => {
-    const isDefaultView =
-      filters.priorityFilter === 'all' &&
-      filters.unitFilter === 'all' &&
-      filters.syslogFilter === 'all' &&
-      filters.hostnameFilter === 'all' &&
-      filters.bootIdFilter === 'all' &&
-      filters.commFilter === 'all' &&
-      filters.transportFilter === 'all' &&
-      filters.pidFilter === '' &&
-      filters.uidFilter === '' &&
-      filters.gidFilter === '' &&
-      filters.debouncedSearchQuery === '' &&
-      filters.sortOrder === 'desc';
-
-    if (logs.length === 0) {
-      setFilteredLogIndices(null);
-      setIsFiltering(false);
-      return;
-    }
-
-    if (isDefaultView) {
-      setFilteredLogIndices(null);
-      setIsFiltering(false);
+    if (!shouldRunClientFiltering) {
       return;
     }
 
     let cancelled = false;
     const jobId = ++filterJobIdRef.current;
-    setIsFiltering(true);
+    const filteringTimeoutId = window.setTimeout(() => {
+      if (cancelled || filterJobIdRef.current !== jobId) return;
+      setIsFiltering(true);
+    }, 0);
 
     syncLogsToWorker({ kind: 'store-logs', logs, mode: 'replace', maxLogs: CLIENT_WINDOW_CAP })
       .then(() => {
@@ -374,6 +338,7 @@ export function useLogData({
       .then((result) => {
         if (!result) return;
         if (cancelled || filterJobIdRef.current !== jobId) return;
+        window.clearTimeout(filteringTimeoutId);
         startTransition(() => {
           setFilteredLogIndices(result.indices || []);
           setIsFiltering(false);
@@ -381,11 +346,13 @@ export function useLogData({
       })
       .catch(() => {
         if (cancelled || filterJobIdRef.current !== jobId) return;
+        window.clearTimeout(filteringTimeoutId);
         setIsFiltering(false);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(filteringTimeoutId);
     };
   }, [
     filterLogsOffThread,
@@ -402,6 +369,7 @@ export function useLogData({
     filters.uidFilter,
     filters.unitFilter,
     logs,
+    shouldRunClientFiltering,
     syncLogsToWorker
   ]);
 
@@ -733,7 +701,13 @@ export function useLogData({
 
   useEffect(() => {
     if (authState !== 'authenticated' || hasCleared) return;
-    void connect();
+    const timeoutId = window.setTimeout(() => {
+      void connect();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [authState, connect, hasCleared]);
 
   useEffect(() => {
@@ -784,8 +758,8 @@ export function useLogData({
 
   return {
     connect,
-    filteredLogIndices,
-    isFiltering,
+    filteredLogIndices: visibleFilteredLogIndices,
+    isFiltering: visibleIsFiltering,
     knownBootIds,
     knownComms,
     knownHostnames,

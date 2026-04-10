@@ -1,5 +1,5 @@
 import type { FilterRequest, LogEntry, ParserRequest, StoreRequest, WorkerResponse } from './types/app';
-import { normalizeLog } from './utils/app';
+import { filterLogIndices, normalizeLog } from './utils/app';
 
 type WorkerRequest =
   | ({ id: number } & ParserRequest)
@@ -61,44 +61,7 @@ function applyStoreUpdate(logs: LogEntry[], mode: StoreRequest['mode'], maxLogs?
 }
 
 function filterLogs(filters: FilterRequest['filters']) {
-  const query = filters.query.toLowerCase();
-  const result: number[] = [];
-  const expressionGroups = filters.expressionFilters.reduce<Record<string, Set<string>>>((groups, filter) => {
-    (groups[filter.field] ??= new Set()).add(filter.value);
-    return groups;
-  }, {});
-
-  for (let index = 0; index < storedLogs.length; index++) {
-    const log = storedLogs[index];
-    if (filters.priorityFilter !== 'all' && String(log.PRIORITY) !== filters.priorityFilter) continue;
-    if (filters.unitFilter !== 'all' && log._SYSTEMD_UNIT !== filters.unitFilter) continue;
-    if (filters.syslogFilter !== 'all' && log.SYSLOG_IDENTIFIER !== filters.syslogFilter) continue;
-    if (filters.hostnameFilter !== 'all' && String(log._HOSTNAME || '') !== filters.hostnameFilter) continue;
-    if (filters.bootIdFilter !== 'all' && String(log._BOOT_ID || '') !== filters.bootIdFilter) continue;
-    if (filters.commFilter !== 'all' && String(log._COMM || '') !== filters.commFilter) continue;
-    if (filters.transportFilter !== 'all' && String(log._TRANSPORT || '') !== filters.transportFilter) continue;
-    if (filters.pidFilter !== '' && String(log._PID || '') !== filters.pidFilter) continue;
-    if (filters.uidFilter !== '' && String(log._UID || '') !== filters.uidFilter) continue;
-    if (filters.gidFilter !== '' && String(log._GID || '') !== filters.gidFilter) continue;
-    let matchesExpressionGroups = true;
-    for (const field in expressionGroups) {
-      if (!expressionGroups[field].has(String(log[field] ?? '').trim())) {
-        matchesExpressionGroups = false;
-        break;
-      }
-    }
-    if (!matchesExpressionGroups) continue;
-
-    if (query && !log._s?.includes(query)) continue;
-
-    result.push(index);
-  }
-
-  if (filters.sortOrder === 'asc') {
-    result.reverse();
-  }
-
-  return result;
+  return filterLogIndices(storedLogs, filters);
 }
 
 ctx.onmessage = (message: MessageEvent<WorkerRequest>) => {

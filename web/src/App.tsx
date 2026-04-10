@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, RefreshCw, X, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Menu, Network, Unplug, Delete, Trash2 } from 'lucide-react';
+import { Search, RefreshCw, X, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Menu, Network, Unplug, Delete, Trash2, HelpCircle } from 'lucide-react';
 
 import { AnsiText } from './components/AnsiText';
 import { AuthScreen } from './components/AuthScreen';
@@ -9,6 +9,7 @@ import { PwaUpdateBanner } from './components/PwaUpdateBanner';
 import { PriorityMultiSelect } from './components/PriorityMultiSelect';
 import { SearchableSelect } from './components/SearchableSelect';
 import { TopBarControls } from './components/TopBarControls';
+import { Popover } from './components/Popover';
 import { useI18n } from './i18n-context';
 import {
   CLIENT_WINDOW_CAP,
@@ -26,6 +27,7 @@ import {
   getNowEndTimeInput,
   getTimePart
 } from './utils/app';
+import { getPopoverPosition, type PopoverPosition } from './components/popover-position';
 
 
 export default function App() {
@@ -40,6 +42,8 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [lastError, setLastError] = useState<string | null>(null);
   const [sessionMenuOpenFor, setSessionMenuOpenFor] = useState<string | null>(null);
+  const [isFilterHelpOpen, setIsFilterHelpOpen] = useState(false);
+  const [filterHelpPosition, setFilterHelpPosition] = useState<PopoverPosition | null>(null);
 
   const desktopSessionMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileSessionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -417,22 +421,44 @@ export default function App() {
                 <X size={12} />
               </button>
             ))}
-            <label className="flex min-w-0 w-full items-center gap-2 rounded-md border border-outline-variant/40 bg-surface-container-highest px-3 py-1.5 md:min-w-[220px] md:flex-1">
-              <Search size={14} className="shrink-0 text-on-surface-variant/45" />
-              <input
-                type="text"
-                value={expressionInput}
-                onChange={(e) => setExpressionInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    applyExpressionInput();
+            <div className="flex min-w-0 w-full items-center gap-2 md:min-w-[220px] md:flex-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (!isFilterHelpOpen) {
+                    setFilterHelpPosition(getPopoverPosition(e.currentTarget, 'left'));
                   }
+                  setIsFilterHelpOpen((prev) => !prev);
                 }}
-                placeholder={messages.addFieldOrKeyword}
-                className="min-w-0 flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/35 focus:outline-none"
-              />
-            </label>
+                className={`inline-flex h-9 shrink-0 items-center justify-center px-1.5 transition-colors ${
+                  isFilterHelpOpen
+                    ? 'text-primary'
+                    : 'text-on-surface-variant/60 hover:text-on-surface'
+                }`}
+                aria-label={messages.filterHelp}
+                title={messages.filterHelp}
+                aria-expanded={isFilterHelpOpen}
+                aria-haspopup="dialog"
+              >
+                <HelpCircle size={16} />
+              </button>
+              <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-outline-variant/40 bg-surface-container-highest px-3 py-1.5">
+                <Search size={14} className="shrink-0 text-on-surface-variant/45" />
+                <input
+                  type="text"
+                  value={expressionInput}
+                  onChange={(e) => setExpressionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      applyExpressionInput();
+                    }
+                  }}
+                  placeholder={messages.addFieldOrKeyword}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/35 focus:outline-none"
+                />
+              </label>
+            </div>
           </div>
           {expressionInputError && (
             <div className="mt-1 text-xs text-error">{expressionInputError}</div>
@@ -504,6 +530,30 @@ export default function App() {
         </div>
       </div>
       {currentPage === 'logs' && renderFilterBar('hidden md:block border-b border-outline-variant/20 bg-surface-container-low/40 px-6 py-2 shrink-0')}
+      <Popover
+        position={filterHelpPosition}
+        isOpen={isFilterHelpOpen}
+        onClose={() => setIsFilterHelpOpen(false)}
+        className="w-[min(360px,calc(100vw-1rem))] rounded-xl border border-outline-variant/35 bg-surface-container-low/95 p-3 shadow-[0_18px_50px_rgba(60,80,140,0.16)] backdrop-blur"
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-semibold text-on-surface">{messages.filterHelpTitle}</span>
+            <span className="text-xs text-on-surface-variant/75">{messages.filterHelpIntro}</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {messages.filterHelpExamples.map((example) => (
+              <div
+                key={example.value}
+                className="flex items-start justify-between gap-3 rounded-lg border border-outline-variant/25 bg-surface-container-highest/70 px-3 py-2"
+              >
+                <span className="min-w-0 text-xs font-medium leading-5 text-on-surface-variant/80">{example.label}</span>
+                <code className="max-w-[68%] break-all font-mono text-xs leading-5 text-primary">{example.value}</code>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Popover>
       <div className="flex flex-1 overflow-hidden relative">
         {/* Mobile Backdrop */}
         {!isBackendPage && isSidebarOpen && (

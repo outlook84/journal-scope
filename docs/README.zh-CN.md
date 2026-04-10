@@ -120,9 +120,13 @@ docker run --name journal-scope -d -p 3030:3030 \
   - 不同字段 (Field) 之间是 **AND** 关系。
   - 同一字段出现多次则是 **OR** 关系。
 - **关键词过滤**：关键词搜索 (Keyword) 仅针对前端已拉取的日志数据进行过滤。
+  - 空格分隔的词是 **AND**：`error timeout`
+  - 双引号用于短语字面量：`"connection reset"`
+  - 前缀 `-` 表示排除某个词或短语：`error -timeout`、`-"retry later"`
+  - 未加引号的 `FIELD=value` 会被当作字段过滤；加引号后会保留为关键词字面量：`SYSLOG_IDENTIFIER=sshd`、`"SYSLOG_IDENTIFIER=sshd"`
+  - 当字段值本身包含空格时，使用 `FIELD="value with spaces"`：`MESSAGE="connection reset by peer"`
 
 ---
 
 ## 📄 许可证
 本项目采用 MIT 许可证。
-

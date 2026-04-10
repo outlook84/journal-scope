@@ -3,9 +3,15 @@ import type { SetStateAction } from 'react';
 
 import { DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT } from '../constants/app';
 import type { SupportedLocale } from '../i18n-context';
-import { getMessages } from '../i18n-context';
 import type { ExpressionFilter } from '../types/app';
-import { getNowEndTimeInput, getPriorityLabel } from '../utils/app';
+import {
+  getNowEndTimeInput,
+  getPriorityLabel,
+  getSearchQueryError,
+  isQueryableFieldName,
+  normalizeStoredSearchFilters,
+  parseSearchQuery
+} from '../utils/app';
 
 type UseLogFiltersOptions = {
   locale?: SupportedLocale;
@@ -38,11 +44,6 @@ type FilterState = PersistedLogFilters & {
 };
 
 const FILTERS_STORAGE_PREFIX = 'journal-scope:log-filters:';
-const VALID_JOURNAL_FIELD_NAME = /^_?[A-Z0-9_]+$/;
-
-function isQueryableFieldName(field: string): boolean {
-  return field !== '' && !field.startsWith('__') && VALID_JOURNAL_FIELD_NAME.test(field);
-}
 
 function isValidEndTimeInput(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return false;
@@ -82,9 +83,23 @@ function readPersistedState(storageScope: string): PersistedLogFilters {
     const raw = window.localStorage.getItem(`${FILTERS_STORAGE_PREFIX}${storageScope}`);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<PersistedLogFilters>;
+    const rawExpressionFilters = Array.isArray(parsed.expressionFilters)
+      ? parsed.expressionFilters.filter((item): item is ExpressionFilter => (
+        !!item &&
+        typeof item === 'object' &&
+        typeof item.field === 'string' &&
+        typeof item.value === 'string' &&
+        isQueryableFieldName(item.field) &&
+        item.value.trim() !== ''
+      ))
+      : defaults.expressionFilters;
+    const normalizedSearchFilters = normalizeStoredSearchFilters(
+      typeof parsed.searchQuery === 'string' ? parsed.searchQuery : defaults.searchQuery,
+      rawExpressionFilters
+    );
 
     return {
-      searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : defaults.searchQuery,
+      searchQuery: normalizedSearchFilters.searchQuery,
       priorityFilter: typeof parsed.priorityFilter === 'string' ? parsed.priorityFilter : defaults.priorityFilter,
       unitFilter: typeof parsed.unitFilter === 'string' ? parsed.unitFilter : defaults.unitFilter,
       syslogFilter: typeof parsed.syslogFilter === 'string' ? parsed.syslogFilter : defaults.syslogFilter,
@@ -95,16 +110,7 @@ function readPersistedState(storageScope: string): PersistedLogFilters {
       pidFilter: typeof parsed.pidFilter === 'string' ? parsed.pidFilter : defaults.pidFilter,
       uidFilter: typeof parsed.uidFilter === 'string' ? parsed.uidFilter : defaults.uidFilter,
       gidFilter: typeof parsed.gidFilter === 'string' ? parsed.gidFilter : defaults.gidFilter,
-      expressionFilters: Array.isArray(parsed.expressionFilters)
-        ? parsed.expressionFilters.filter((item): item is ExpressionFilter => (
-          !!item &&
-          typeof item === 'object' &&
-          typeof item.field === 'string' &&
-          typeof item.value === 'string' &&
-          isQueryableFieldName(item.field) &&
-          item.value.trim() !== ''
-        ))
-        : defaults.expressionFilters,
+      expressionFilters: normalizedSearchFilters.expressionFilters,
       endTimeInput: typeof parsed.endTimeInput === 'string' && isValidEndTimeInput(parsed.endTimeInput)
         ? parsed.endTimeInput
         : defaults.endTimeInput,
@@ -129,7 +135,6 @@ function buildInitialFilterState(storageScope?: string | null): FilterState {
 }
 
 export function useLogFilters({ locale = 'en', onDirty, storageScope }: UseLogFiltersOptions = {}) {
-  const copy = getMessages(locale);
   const scopeKey = storageScope ?? '__default__';
   const [stateByScope, setStateByScope] = useState<Record<string, FilterState>>({});
   const currentState = useMemo(
@@ -311,7 +316,7 @@ export function useLogFilters({ locale = 'en', onDirty, storageScope }: UseLogFi
     bootIdFilter !== 'all' ? { key: 'boot', label: `_BOOT_ID=${bootIdFilter}`, onRemove: () => setBootIdFilter('all') } : null,
     commFilter !== 'all' ? { key: 'comm', label: `_COMM=${commFilter}`, onRemove: () => setCommFilter('all') } : null,
     transportFilter !== 'all' ? { key: 'transport', label: `_TRANSPORT=${transportFilter}`, onRemove: () => setTransportFilter('all') } : null,
-    searchQuery !== '' ? { key: 'query', label: `QUERY~${JSON.stringify(searchQuery)}`, onRemove: () => setSearchQuery('') } : null,
+    searchQuery !== '' ? { key: 'query', label: `QUERY~${searchQuery}`, onRemove: () => setSearchQuery('') } : null,
     ...expressionFilters.map(({ field, value }) => ({
       key: `expr:${field}:${value}`,
       label: field === 'PRIORITY' ? `${field}=${getPriorityLabel(value, locale)}` : `${field}=${value}`,
@@ -336,33 +341,38 @@ export function useLogFilters({ locale = 'en', onDirty, storageScope }: UseLogFi
     const value = expressionInput.trim();
     if (!value) return;
 
-    onDirty?.();
-    setExpressionInputError(null);
-    const eqIndex = value.indexOf('=');
-    if (eqIndex > 0) {
-      const field = value.slice(0, eqIndex).trim();
-      const fieldValue = value.slice(eqIndex + 1).trim();
-      if (field && fieldValue) {
-        if (field.startsWith('__')) {
-          setExpressionInputError(copy.addressFieldsCannotBeUsed(field));
-          return;
-        }
-        if (!VALID_JOURNAL_FIELD_NAME.test(field)) {
-          setExpressionInputError(copy.invalidFieldName(field));
-          return;
-        }
-        setExpressionFilters((prev) => (
-          prev.some((item) => item.field === field && item.value === fieldValue)
-            ? prev
-            : [...prev, { field, value: fieldValue }]
-        ));
-        setExpressionInput('');
-        setExpressionInputError(null);
-        return;
-      }
+    const queryError = getSearchQueryError(value, locale);
+    if (queryError) {
+      setExpressionInputError(queryError);
+      return;
     }
 
-    setSearchQuery(value);
+    const parsed = parseSearchQuery(value);
+    const hasNewFieldFilter = parsed.fieldFilters.some((filter) => (
+      !expressionFilters.some((item) => item.field === filter.field && item.value === filter.value)
+    ));
+    const hasSearchQueryChange = parsed.keywordQuery !== '' && parsed.keywordQuery !== searchQuery;
+
+    if (hasNewFieldFilter || hasSearchQueryChange) {
+      onDirty?.();
+    }
+
+    if (hasNewFieldFilter) {
+      setExpressionFilters((prev) => {
+        const next = prev.slice();
+        for (const filter of parsed.fieldFilters) {
+          if (!next.some((item) => item.field === filter.field && item.value === filter.value)) {
+            next.push(filter);
+          }
+        }
+        return next.length === prev.length ? prev : next;
+      });
+    }
+
+    if (hasSearchQueryChange) {
+      setSearchQuery(parsed.keywordQuery);
+    }
+
     setExpressionInput('');
     setExpressionInputError(null);
   };

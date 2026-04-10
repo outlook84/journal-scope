@@ -120,6 +120,11 @@ Once started, access the Web UI. After logging in with the `admin` access code, 
     - Filtering between **different fields** (e.g., Unit and Priority) uses **AND** logic.
     - Multiple values for the **same field** use **OR** logic.
 - **Keyword Filtering**: The keyword search only filters through the logs that have already been pulled into the client.
+    - Space-separated terms use **AND** logic: `error timeout`
+    - Double quotes keep literal phrases together: `"connection reset"`
+    - Prefix with `-` to exclude a term or phrase: `error -timeout`, `-"retry later"`
+    - Unquoted `FIELD=value` tokens are parsed as field filters, while quoted forms stay keyword literals: `SYSLOG_IDENTIFIER=sshd`, `"SYSLOG_IDENTIFIER=sshd"`
+    - Use `FIELD="value with spaces"` when the field value itself contains spaces: `MESSAGE="connection reset by peer"`
 
 ---
 
