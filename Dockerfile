@@ -21,7 +21,7 @@ COPY --from=web-build /app/web/dist ./web/dist
 RUN apk add --no-cache ca-certificates && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X journal-scope.Version=${JOURNAL_SCOPE_VERSION}" -o /out/journal-scope ./cmd/journal-scope
 
-FROM busybox:1.37
+FROM tianon/toybox:0.8.13
 RUN mkdir -p /data
 
 COPY --from=go-build /etc/ssl/certs /etc/ssl/certs
