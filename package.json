@@ -19,11 +19,5 @@
     "lint": "pnpm --dir web lint",
     "lint:typecheck": "pnpm --dir web lint:typecheck",
     "lint:eslint": "pnpm --dir web lint:eslint"
-  },
-  "pnpm": {
-    "overrides": {
-      "esbuild": "0.25.0",
-      "minimatch@>=9.0.0 <9.0.7": "9.0.7"
-    }
   }
 }
