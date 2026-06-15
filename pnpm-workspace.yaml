@@ -2,7 +2,3 @@ packages:
   - web
 
 minimumReleaseAge: 4320
-
-overrides:
-  esbuild: 0.25.0
-  minimatch@>=9.0.0 <9.0.7: 9.0.7
