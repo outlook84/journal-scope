@@ -93,6 +93,8 @@ export function useSession({
   }, [apiUrl, copy.failedToLoadSession, copy.invalidSessionResponse, resetSession, setLastError]);
 
   useEffect(() => {
+    // The async session fetch owns the state updates after the network response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSession();
   }, [loadSession]);
 
